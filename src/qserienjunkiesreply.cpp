@@ -85,23 +85,36 @@ void QSerienJunkiesReply::searchSeries(const QString &string)
 void QSerienJunkiesReply::seriesSearchReplyFinished()
 {
     QNetworkReply *reply = static_cast<QNetworkReply *>(sender());
+    if(!reply)
+        return;
+
     QJsonParseError jsonError;
     QJsonDocument jsonDocument = QJsonDocument::fromJson(reply->readAll(), &jsonError);
     reply->deleteLater();
     reply = nullptr;
 
     if(jsonError.error != QJsonParseError::NoError) {
-        data->errorString = "The returned JSON was not valid";
+        data->errorString = "The returned JSON was not valid: "+jsonError.errorString();
         emit error();
         return;
     }
 
-    QVariantList resultList = jsonDocument.toVariant().toList();
-    if(resultList.isEmpty())
+    QVariant v = jsonDocument.toVariant();
+    if(v.canConvert<QVariantList>()) {
+        data->errorString = "The returned JSON is no list.";
+        emit error();
         return;
+    }
 
+    QVariantList resultList = v.toList();
     data->seasonCount = resultList.size();
 
+    if(data->seasonCount == 0) {
+        emit finished();
+        return;
+    }
+
+    // Get the given URLs, because the actual URL of a series is in the "Location" header of these URLs.
     foreach(QVariant result, resultList) {
         QVariantList list = result.toList();
         if(list.size() != 2)
@@ -126,12 +139,16 @@ void QSerienJunkiesReply::seriesSearchReplyFinished()
 void QSerienJunkiesReply::seriesLocationReplyFinished()
 {
     QNetworkReply *reply = static_cast<QNetworkReply *>(sender());
+    if(!reply)
+        return;
+
     int index = reply->property("index").toInt();
+    Q_ASSERT(index >= 0 && index < data->series.size());
+
     data->series[index].url = reply->header(QNetworkRequest::LocationHeader).toUrl();
     ++data->finishedSeasons;
 
     reply->deleteLater();
-    reply = nullptr;
 
     if(data->finishedSeasons == data->seasonCount) {
         emit finished();
@@ -151,6 +168,9 @@ void QSerienJunkiesReply::searchSeasons(const QUrl &seriesUrl)
 void QSerienJunkiesReply::seasonSearchReplyFinished()
 {
     QNetworkReply *reply = static_cast<QNetworkReply *>(sender());
+    if(!reply)
+        return;
+
     QString page = QString::fromUtf8(reply->readAll());
     reply->deleteLater();
     reply = nullptr;
@@ -182,10 +202,14 @@ void QSerienJunkiesReply::searchDownloads(const QUrl &seasonUrl)
 void QSerienJunkiesReply::downloadSearchReplyFinished()
 {
     QNetworkReply *reply = static_cast<QNetworkReply *>(sender());
+    if(!reply)
+        return;
+
     QString page = QString::fromUtf8(reply->readAll());
     reply->deleteLater();
     reply = nullptr;
 
+    // This code has been taken from JDownloader and adjusted for Qt
     QStringList lines = page.split('\n');
 
     Format currentFormat;
@@ -241,26 +265,34 @@ void QSerienJunkiesReply::decrypt(const QUrl &url)
 void QSerienJunkiesReply::decryptLinkReplyFinished()
 {
     QNetworkReply *reply = static_cast<QNetworkReply *>(sender());
+    if(!reply)
+        return;
+
     QString page = QString::fromUtf8(reply->readAll());
     data->captchaPageUrl = reply->url();
     reply->deleteLater();
     reply = nullptr;
 
     int index = page.indexOf("<FORM ACTION=\"\" METHOD=\"post\" NAME=\"INPF\" ID=\"postit\" STYLE=\"display:inline;\">");
+    if(index < 0) {
+        data->errorString = "Could not find captcha formular.";
+        emit error();
+        return;
+    }
     int index2 = page.indexOf("</FORM>", index);
-    QString form = page.mid(index, index2 - index) + 7;
-    if(form.isEmpty()
-            || index < 0
-            || index2 < 0) {
-        data->errorString = "Could not find captcha.";
+    if(index2 < 0
+            || index2 < index) {
+        data->errorString = "Could not find end of captcha formular.";
         emit error();
         return;
     }
 
+    QString form = page.mid(index, index2 - index);
+
     QRegularExpression reg("\\<INPUT TYPE=\"HIDDEN\" NAME=\"s\" VALUE=\"(.*)\"\\>");
     QRegularExpressionMatch match = reg.match(form);
     if(!match.hasMatch()) {
-        data->errorString = "Could not find captcha.";
+        data->errorString = "Could not find hidden form data of captcha.";
         emit error();
         return;
     }
@@ -273,14 +305,17 @@ void QSerienJunkiesReply::decryptLinkReplyFinished()
         emit error();
         return;
     }
+
     QUrl captchaUrl(QString("http://download.serienjunkies.org/secure/%1").arg(match.captured(1)));
 
     reply = QSerienJunkies::networkAccessManager()->get(QNetworkRequest(captchaUrl));
-
     QObject::connect(reply, SIGNAL(error(QNetworkReply::NetworkError)),
                      this, SLOT(onError()));
 
     connect(reply, &QNetworkReply::finished, [=]() {
+        if(!reply)
+            return;
+
         data->captchaData = reply->readAll();
         reply->deleteLater();
         emit requiresCaptcha();
@@ -307,6 +342,9 @@ void QSerienJunkiesReply::solveCaptcha(const QString &captcha)
 void QSerienJunkiesReply::decryptedLinkReplyFinished()
 {
     QNetworkReply *reply = static_cast<QNetworkReply *>(sender());
+    if(!reply)
+        return;
+
     QString page = QString::fromUtf8(reply->readAll());
     reply->deleteLater();
     reply = nullptr;
@@ -337,8 +375,6 @@ void QSerienJunkiesReply::decryptedLinkReplyFinished()
             });
         }
     }
-
-    reply->deleteLater();
 }
 
 void QSerienJunkiesReply::onError()
