@@ -47,13 +47,14 @@ public:
 
     // Downloads search
     QList<Format> formats() const;
-    QList<DownloadLink> downloads(const Format &format, const QStringList &mirrors) const;
-    QList<DownloadLink> downloads(const Format &format, const QString &mirror) const;
+    QList<DownloadLink> downloadLinks(const Format &format, const QStringList &mirrors) const;
+    QList<DownloadLink> downloadLinks(const Format &format, const QString &mirror) const;
 
     // Decrypting
     QByteArray captcha() const;
     void solveCaptcha(const QString &captcha);
-    QList<QUrl> downloadLinks() const;
+    QString packageName() const;
+    QList<QUrl> urls() const;
 
 Q_SIGNALS:
     void finished();

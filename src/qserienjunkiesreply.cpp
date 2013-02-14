@@ -50,6 +50,7 @@ public:
     int downloadLinkCount;
     int finishedDownloadLinks;
     QList<QUrl> downloadLinks;
+    QString packageName;
 
     QSerienJunkiesReply *q;
 };
@@ -273,6 +274,9 @@ void QSerienJunkiesReply::decryptLinkReplyFinished()
     reply->deleteLater();
     reply = nullptr;
 
+    QRegularExpression packageNameReg("<TITLE>.* \\- (.*?)</TITLE>");
+    data->packageName = packageNameReg.match(page).captured(1);
+
     int index = page.indexOf("<FORM ACTION=\"\" METHOD=\"post\" NAME=\"INPF\" ID=\"postit\" STYLE=\"display:inline;\">");
     if(index < 0) {
         data->errorString = "Could not find captcha formular.";
@@ -337,6 +341,11 @@ void QSerienJunkiesReply::solveCaptcha(const QString &captcha)
                      this, SLOT(onError()));
 
     connect(reply, &QNetworkReply::finished, this, &QSerienJunkiesReply::decryptedLinkReplyFinished);
+}
+
+QString QSerienJunkiesReply::packageName() const
+{
+    return data->packageName;
 }
 
 void QSerienJunkiesReply::decryptedLinkReplyFinished()
@@ -407,7 +416,7 @@ QString QSerienJunkiesReply::errorString() const
 }
 
 
-QList<QSerienJunkiesReply::DownloadLink> QSerienJunkiesReply::downloads(const QSerienJunkiesReply::Format &format, const QString &mirror) const
+QList<QSerienJunkiesReply::DownloadLink> QSerienJunkiesReply::downloadLinks(const QSerienJunkiesReply::Format &format, const QString &mirror) const
 {
     if(data->cryptedDownloadLinks.contains(format.description)) {
         auto linksPerMirror = data->cryptedDownloadLinks[format.description];
@@ -424,13 +433,13 @@ QByteArray QSerienJunkiesReply::captcha() const
     return data->captchaData;
 }
 
-QList<QUrl> QSerienJunkiesReply::downloadLinks() const
+QList<QUrl> QSerienJunkiesReply::urls() const
 {
     return data->downloadLinks;
 }
 
 
-QList<QSerienJunkiesReply::DownloadLink> QSerienJunkiesReply::downloads(const QSerienJunkiesReply::Format &format, const QStringList &mirrors) const
+QList<QSerienJunkiesReply::DownloadLink> QSerienJunkiesReply::downloadLinks(const QSerienJunkiesReply::Format &format, const QStringList &mirrors) const
 {
     QList<QSerienJunkiesReply::DownloadLink> result;
     foreach(const QString mirror, mirrors) {
