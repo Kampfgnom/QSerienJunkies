@@ -9,6 +9,7 @@
 #include <QUrl>
 
 class QSerienJunkiesReplyData;
+class QNetworkReply;
 
 class QSerienJunkiesReply : public QObject
 {
@@ -78,6 +79,7 @@ private:
     void searchSeasons(const QUrl &seriesUrl);
     void searchDownloads(const QUrl &seasonUrl);
     void decrypt(const QUrl &url);
+    void decryptLinkReplyFinishedHelper(const QString &page);
 
     QSharedDataPointer<QSerienJunkiesReplyData> data;
 

@@ -274,6 +274,11 @@ void QSerienJunkiesReply::decryptLinkReplyFinished()
     reply->deleteLater();
     reply = nullptr;
 
+    decryptLinkReplyFinishedHelper(page);
+}
+
+void QSerienJunkiesReply::decryptLinkReplyFinishedHelper(const QString &page)
+{
     QRegularExpression packageNameReg("<TITLE>.* \\- (.*?)</TITLE>");
     data->packageName = packageNameReg.match(page).captured(1);
 
@@ -312,7 +317,7 @@ void QSerienJunkiesReply::decryptLinkReplyFinished()
 
     QUrl captchaUrl(QString("http://download.serienjunkies.org/secure/%1").arg(match.captured(1)));
 
-    reply = QSerienJunkies::networkAccessManager()->get(QNetworkRequest(captchaUrl));
+    QNetworkReply *reply = QSerienJunkies::networkAccessManager()->get(QNetworkRequest(captchaUrl));
     QObject::connect(reply, SIGNAL(error(QNetworkReply::NetworkError)),
                      this, SLOT(onError()));
 
@@ -358,8 +363,14 @@ void QSerienJunkiesReply::decryptedLinkReplyFinished()
     reply->deleteLater();
     reply = nullptr;
 
+
     QRegularExpression findForms("\\<FORM ACTION=\"(.+)\" STYLE=\"display: inline;\" TARGET=\"_blank\"\\>");
     QRegularExpressionMatchIterator it = findForms.globalMatch(page);
+
+    if(!it.hasNext()) {
+        decryptLinkReplyFinishedHelper(page);
+        return;
+    }
 
     while(it.hasNext()) {
         QRegularExpressionMatch match = it.next();
