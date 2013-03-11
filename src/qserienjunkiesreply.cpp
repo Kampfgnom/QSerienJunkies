@@ -81,6 +81,9 @@ void QSerienJunkiesReply::searchSeries(const QString &string)
 
     QObject::connect(reply, SIGNAL(error(QNetworkReply::NetworkError)),
                      this, SLOT(onError()));
+
+    QObject::connect(this, &QObject::destroyed,
+                     reply, &QNetworkReply::deleteLater);
 }
 
 void QSerienJunkiesReply::seriesSearchReplyFinished()
@@ -101,7 +104,7 @@ void QSerienJunkiesReply::seriesSearchReplyFinished()
     }
 
     QVariant v = jsonDocument.toVariant();
-    if(v.canConvert<QVariantList>()) {
+    if(static_cast<QMetaType::Type>(v.type()) != QMetaType::QVariantList) {
         data->errorString = "The returned JSON is no list.";
         emit error();
         return;
@@ -134,6 +137,9 @@ void QSerienJunkiesReply::seriesSearchReplyFinished()
 
         QObject::connect(locationReply, SIGNAL(error(QNetworkReply::NetworkError)),
                          this, SLOT(onError()));
+
+        QObject::connect(this, &QObject::destroyed,
+                         locationReply, &QNetworkReply::deleteLater);
     }
 }
 
@@ -164,6 +170,9 @@ void QSerienJunkiesReply::searchSeasons(const QUrl &seriesUrl)
 
     QObject::connect(reply, SIGNAL(error(QNetworkReply::NetworkError)),
                      this, SLOT(onError()));
+
+    QObject::connect(this, &QObject::destroyed,
+                     reply, &QNetworkReply::deleteLater);
 }
 
 void QSerienJunkiesReply::seasonSearchReplyFinished()
@@ -198,6 +207,9 @@ void QSerienJunkiesReply::searchDownloads(const QUrl &seasonUrl)
 
     QObject::connect(reply, SIGNAL(error(QNetworkReply::NetworkError)),
                      this, SLOT(onError()));
+
+    QObject::connect(this, &QObject::destroyed,
+                     reply, &QNetworkReply::deleteLater);
 }
 
 void QSerienJunkiesReply::downloadSearchReplyFinished()
@@ -207,6 +219,30 @@ void QSerienJunkiesReply::downloadSearchReplyFinished()
         return;
 
     QString page = QString::fromUtf8(reply->readAll());
+
+    if(page.isEmpty()) {
+        QUrl location = reply->header(QNetworkRequest::LocationHeader).toUrl();
+        if(location.isValid()) {
+            reply->deleteLater();
+            reply = QSerienJunkies::networkAccessManager()->get(QNetworkRequest(location));
+
+            QObject::connect(reply, &QNetworkReply::finished,
+                             this, &QSerienJunkiesReply::downloadSearchReplyFinished);
+
+            QObject::connect(reply, SIGNAL(error(QNetworkReply::NetworkError)),
+                             this, SLOT(onError()));
+
+            QObject::connect(this, &QObject::destroyed,
+                             reply, &QNetworkReply::deleteLater);
+            return;
+        }
+        else {
+            data->errorString = "Episode search reply was empty.";
+            emit error();
+            return;
+        }
+    }
+
     reply->deleteLater();
     reply = nullptr;
 
@@ -261,6 +297,9 @@ void QSerienJunkiesReply::decrypt(const QUrl &url)
 
     QObject::connect(reply, SIGNAL(error(QNetworkReply::NetworkError)),
                      this, SLOT(onError()));
+
+    QObject::connect(this, &QObject::destroyed,
+                     reply, &QNetworkReply::deleteLater);
 }
 
 void QSerienJunkiesReply::decryptLinkReplyFinished()
@@ -321,6 +360,9 @@ void QSerienJunkiesReply::decryptLinkReplyFinishedHelper(const QString &page)
     QObject::connect(reply, SIGNAL(error(QNetworkReply::NetworkError)),
                      this, SLOT(onError()));
 
+    QObject::connect(this, &QObject::destroyed,
+                     reply, &QNetworkReply::deleteLater);
+
     connect(reply, &QNetworkReply::finished, [=]() {
         if(!reply)
             return;
@@ -344,6 +386,9 @@ void QSerienJunkiesReply::solveCaptcha(const QString &captcha)
 
     QObject::connect(reply, SIGNAL(error(QNetworkReply::NetworkError)),
                      this, SLOT(onError()));
+
+    QObject::connect(this, &QObject::destroyed,
+                     reply, &QNetworkReply::deleteLater);
 
     connect(reply, &QNetworkReply::finished, this, &QSerienJunkiesReply::decryptedLinkReplyFinished);
 }
