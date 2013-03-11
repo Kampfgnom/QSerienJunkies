@@ -71,7 +71,7 @@ int main(int argc, char *argv[])
                 qDebug() << "Format:" << format.description;
                 foreach(auto mirror, format.mirrors) {
                     qDebug() << "Mirror:" << mirror;
-                    foreach(auto download, result->downloads(format, mirror)) {
+                    foreach(auto download, result->downloadLinks(format, mirror)) {
                         qDebug() << download.name << download.url;
                     }
                 }
@@ -108,7 +108,7 @@ int main(int argc, char *argv[])
 
         QObject::connect(result, &QSerienJunkiesReply::finished, [&]() {
             qDebug() << "Decrypted:";
-            qDebug() << result->downloadLinks();
+            qDebug() << result->urls();
             result->deleteLater();
             result = nullptr;
         });

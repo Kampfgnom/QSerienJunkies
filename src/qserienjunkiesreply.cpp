@@ -50,6 +50,7 @@ public:
     int downloadLinkCount;
     int finishedDownloadLinks;
     QList<QUrl> downloadLinks;
+    QString packageName;
 
     QSerienJunkiesReply *q;
 };
@@ -80,6 +81,9 @@ void QSerienJunkiesReply::searchSeries(const QString &string)
 
     QObject::connect(reply, SIGNAL(error(QNetworkReply::NetworkError)),
                      this, SLOT(onError()));
+
+    QObject::connect(this, &QObject::destroyed,
+                     reply, &QNetworkReply::deleteLater);
 }
 
 void QSerienJunkiesReply::seriesSearchReplyFinished()
@@ -100,7 +104,7 @@ void QSerienJunkiesReply::seriesSearchReplyFinished()
     }
 
     QVariant v = jsonDocument.toVariant();
-    if(v.canConvert<QVariantList>()) {
+    if(static_cast<QMetaType::Type>(v.type()) != QMetaType::QVariantList) {
         data->errorString = "The returned JSON is no list.";
         emit error();
         return;
@@ -133,6 +137,9 @@ void QSerienJunkiesReply::seriesSearchReplyFinished()
 
         QObject::connect(locationReply, SIGNAL(error(QNetworkReply::NetworkError)),
                          this, SLOT(onError()));
+
+        QObject::connect(this, &QObject::destroyed,
+                         locationReply, &QNetworkReply::deleteLater);
     }
 }
 
@@ -163,6 +170,9 @@ void QSerienJunkiesReply::searchSeasons(const QUrl &seriesUrl)
 
     QObject::connect(reply, SIGNAL(error(QNetworkReply::NetworkError)),
                      this, SLOT(onError()));
+
+    QObject::connect(this, &QObject::destroyed,
+                     reply, &QNetworkReply::deleteLater);
 }
 
 void QSerienJunkiesReply::seasonSearchReplyFinished()
@@ -197,6 +207,9 @@ void QSerienJunkiesReply::searchDownloads(const QUrl &seasonUrl)
 
     QObject::connect(reply, SIGNAL(error(QNetworkReply::NetworkError)),
                      this, SLOT(onError()));
+
+    QObject::connect(this, &QObject::destroyed,
+                     reply, &QNetworkReply::deleteLater);
 }
 
 void QSerienJunkiesReply::downloadSearchReplyFinished()
@@ -206,6 +219,30 @@ void QSerienJunkiesReply::downloadSearchReplyFinished()
         return;
 
     QString page = QString::fromUtf8(reply->readAll());
+
+    if(page.isEmpty()) {
+        QUrl location = reply->header(QNetworkRequest::LocationHeader).toUrl();
+        if(location.isValid()) {
+            reply->deleteLater();
+            reply = QSerienJunkies::networkAccessManager()->get(QNetworkRequest(location));
+
+            QObject::connect(reply, &QNetworkReply::finished,
+                             this, &QSerienJunkiesReply::downloadSearchReplyFinished);
+
+            QObject::connect(reply, SIGNAL(error(QNetworkReply::NetworkError)),
+                             this, SLOT(onError()));
+
+            QObject::connect(this, &QObject::destroyed,
+                             reply, &QNetworkReply::deleteLater);
+            return;
+        }
+        else {
+            data->errorString = "Episode search reply was empty.";
+            emit error();
+            return;
+        }
+    }
+
     reply->deleteLater();
     reply = nullptr;
 
@@ -260,6 +297,9 @@ void QSerienJunkiesReply::decrypt(const QUrl &url)
 
     QObject::connect(reply, SIGNAL(error(QNetworkReply::NetworkError)),
                      this, SLOT(onError()));
+
+    QObject::connect(this, &QObject::destroyed,
+                     reply, &QNetworkReply::deleteLater);
 }
 
 void QSerienJunkiesReply::decryptLinkReplyFinished()
@@ -272,6 +312,14 @@ void QSerienJunkiesReply::decryptLinkReplyFinished()
     data->captchaPageUrl = reply->url();
     reply->deleteLater();
     reply = nullptr;
+
+    decryptLinkReplyFinishedHelper(page);
+}
+
+void QSerienJunkiesReply::decryptLinkReplyFinishedHelper(const QString &page)
+{
+    QRegularExpression packageNameReg("<TITLE>.* \\- (.*?)</TITLE>");
+    data->packageName = packageNameReg.match(page).captured(1);
 
     int index = page.indexOf("<FORM ACTION=\"\" METHOD=\"post\" NAME=\"INPF\" ID=\"postit\" STYLE=\"display:inline;\">");
     if(index < 0) {
@@ -308,9 +356,12 @@ void QSerienJunkiesReply::decryptLinkReplyFinished()
 
     QUrl captchaUrl(QString("http://download.serienjunkies.org/secure/%1").arg(match.captured(1)));
 
-    reply = QSerienJunkies::networkAccessManager()->get(QNetworkRequest(captchaUrl));
+    QNetworkReply *reply = QSerienJunkies::networkAccessManager()->get(QNetworkRequest(captchaUrl));
     QObject::connect(reply, SIGNAL(error(QNetworkReply::NetworkError)),
                      this, SLOT(onError()));
+
+    QObject::connect(this, &QObject::destroyed,
+                     reply, &QNetworkReply::deleteLater);
 
     connect(reply, &QNetworkReply::finished, [=]() {
         if(!reply)
@@ -336,7 +387,15 @@ void QSerienJunkiesReply::solveCaptcha(const QString &captcha)
     QObject::connect(reply, SIGNAL(error(QNetworkReply::NetworkError)),
                      this, SLOT(onError()));
 
+    QObject::connect(this, &QObject::destroyed,
+                     reply, &QNetworkReply::deleteLater);
+
     connect(reply, &QNetworkReply::finished, this, &QSerienJunkiesReply::decryptedLinkReplyFinished);
+}
+
+QString QSerienJunkiesReply::packageName() const
+{
+    return data->packageName;
 }
 
 void QSerienJunkiesReply::decryptedLinkReplyFinished()
@@ -349,8 +408,14 @@ void QSerienJunkiesReply::decryptedLinkReplyFinished()
     reply->deleteLater();
     reply = nullptr;
 
+
     QRegularExpression findForms("\\<FORM ACTION=\"(.+)\" STYLE=\"display: inline;\" TARGET=\"_blank\"\\>");
     QRegularExpressionMatchIterator it = findForms.globalMatch(page);
+
+    if(!it.hasNext()) {
+        decryptLinkReplyFinishedHelper(page);
+        return;
+    }
 
     while(it.hasNext()) {
         QRegularExpressionMatch match = it.next();
@@ -407,7 +472,7 @@ QString QSerienJunkiesReply::errorString() const
 }
 
 
-QList<QSerienJunkiesReply::DownloadLink> QSerienJunkiesReply::downloads(const QSerienJunkiesReply::Format &format, const QString &mirror) const
+QList<QSerienJunkiesReply::DownloadLink> QSerienJunkiesReply::downloadLinks(const QSerienJunkiesReply::Format &format, const QString &mirror) const
 {
     if(data->cryptedDownloadLinks.contains(format.description)) {
         auto linksPerMirror = data->cryptedDownloadLinks[format.description];
@@ -424,13 +489,13 @@ QByteArray QSerienJunkiesReply::captcha() const
     return data->captchaData;
 }
 
-QList<QUrl> QSerienJunkiesReply::downloadLinks() const
+QList<QUrl> QSerienJunkiesReply::urls() const
 {
     return data->downloadLinks;
 }
 
 
-QList<QSerienJunkiesReply::DownloadLink> QSerienJunkiesReply::downloads(const QSerienJunkiesReply::Format &format, const QStringList &mirrors) const
+QList<QSerienJunkiesReply::DownloadLink> QSerienJunkiesReply::downloadLinks(const QSerienJunkiesReply::Format &format, const QStringList &mirrors) const
 {
     QList<QSerienJunkiesReply::DownloadLink> result;
     foreach(const QString mirror, mirrors) {

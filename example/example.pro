@@ -5,7 +5,7 @@ VERSION         = 0.0.0
 TEMPLATE        = app
 QT              += network xml widgets
 QT              -=
-CONFIG          += libc++11 c++11
+CONFIG          += c++11
 QMAKE_CXXFLAGS  += -Wall -ansi -pedantic -Wno-long-long
 
 ### QSERIENJUNKIES ###
