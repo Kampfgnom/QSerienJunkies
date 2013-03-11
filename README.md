@@ -13,7 +13,7 @@ You can simply add the whole project to your qmake based project and add the fol
 
 ````
 QSERIENJUNKIES_PATH = relative/or/absolute/path/to/QSerienJunkies
-include($$QSERIENJUNKIES_PATH/QHal.pri)
+include($$QSERIENJUNKIES_PATH/QSerienJunkies.pri)
 LIBS            += $$QSERIENJUNKIES_LIBS
 INCLUDEPATH     += $$QSERIENJUNKIES_INCLUDEPATH
 `````
