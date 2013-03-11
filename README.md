@@ -1,4 +1,4 @@
-QSerienJunkies 0.1
+QSerienJunkies 0.0
 ========
 
 QSerienJunkies is a Qt wrapper for serienjunkies.org.
@@ -40,7 +40,7 @@ make
 
 Contributing
 ============
-Since this library is currently not in use, it is not well tested.
+Since this library is currently not in use, it is not tested well.
 
 If you find errors, simply file an issue in GitHub, or even better:
 
