@@ -274,7 +274,8 @@ void QSerienJunkiesReply::downloadSearchReplyFinished()
             link.name = normalName;
             link.url = url;
 
-            currentFormat.mirrors.append(mirror);
+            if(!currentFormat.mirrors.contains(mirror))
+                currentFormat.mirrors.append(mirror);
             data->cryptedDownloadLinks[currentFormat.description][mirror].append(link);
         }
         else if (line.contains("<strong>")) {
